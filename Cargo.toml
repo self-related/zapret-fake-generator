@@ -1,0 +1,10 @@
+[package]
+name = "zapret-fake-generator"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+quinn = "0.11.11"
+rustls = "0.23.42"
+rustls-platform-verifier = "0.7.0"
+tokio = { version = "1.53.1", features = ["full"] }

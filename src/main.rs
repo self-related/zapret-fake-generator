@@ -151,12 +151,14 @@ fn handle_client_udp(bytes_read: usize, src_addr: SocketAddr, buffer: &mut [u8; 
                 
                 let raw_packet = &buffer[..bytes_read];
 
-                if raw_packet.len() > 14 && raw_packet[4] == 0x01 {
-                // if true {
-                    println!("Valid QUIC ClientHello detected! Saving to file...");
+                // if raw_packet.len() > 14 && raw_packet[4] == 0x01 {
+                if raw_packet.len() > 14 { // do not check proto
 
                     // Save the exact raw UDP bytes to a binary file
                     let file_name = format!("quic_{sni}.bin");
+
+                    println!("Saving UDP fake to file '{file_name}'");
+
                     match File::create(&file_name) {
                         Ok(mut file) => {
                             if let Err(e) = file.write_all(raw_packet) {

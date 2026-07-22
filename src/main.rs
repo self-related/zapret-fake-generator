@@ -96,7 +96,7 @@ fn handle_client_tcp(mut stream: TcpStream, done: Arc<Mutex<bool>>) {
 }
 
 
-fn connect_tcp_socket(mode: &Mode, sni: String) -> bool {
+fn connect_tcp_socket(mode: &Mode, sni: String, bloat_len: Option<usize>) -> bool {
     let mut stream = TcpStream::connect(format!("127.0.0.1:1111")).unwrap();
 
     let tls_ver = if let Mode::TLS12 = mode { &rustls::version::TLS12 } else { &rustls::version::TLS13 };
@@ -111,8 +111,11 @@ fn connect_tcp_socket(mode: &Mode, sni: String) -> bool {
             b"h2".to_vec(),
             b"http/1.1".to_vec(),
         ];
-        for _ in 0..40 {
-            config.alpn_protocols.push(vec![0u8; 20]);
+
+        if let Some(len) = bloat_len {
+            for _ in 0..len {
+                config.alpn_protocols.push(vec![0u8; 1]);
+            }
         }
     }
 
@@ -255,9 +258,25 @@ fn handle_input() -> (Mode, String) {
     }
 }
 
+fn get_bloat_len() -> Option<usize> {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() > 1 {
+        return match args[1].parse::<usize>() {
+            Ok(num) => Some(num / 2), // halve because of header 1 byte overhead
+            Err(_) => None
+        }
+    } else {
+        None
+    }
+}
+
+
 #[tokio::main]
 async fn main() {
     init_cyphers();
+    let bloat_len = get_bloat_len();
+
+    println!("TLS 1.2 length increment: {} bytes\n", if let Some(len) = bloat_len { len * 2 } else { 0 });
 
     loop {
         let (mode, sni) = handle_input();
@@ -268,7 +287,7 @@ async fn main() {
             Mode::TLS12 | Mode::TLS13 => {
                 let th_tcp_socket = thread::spawn(move || open_tcp_socket(1111, done_th));
                 let th_tcp_connect = thread::spawn(move || {
-                    let res = connect_tcp_socket(&mode, sni);
+                    let res = connect_tcp_socket(&mode, sni, bloat_len);
                     if !res {
                         *done.lock().unwrap() = true;
                     }

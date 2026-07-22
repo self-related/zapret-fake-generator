@@ -101,9 +101,20 @@ fn connect_tcp_socket(mode: &Mode, sni: String) -> bool {
 
     let tls_ver = if let Mode::TLS12 = mode { &rustls::version::TLS12 } else { &rustls::version::TLS13 };
 
-    let config = ClientConfig::builder_with_protocol_versions(&[tls_ver])
+    let mut config = ClientConfig::builder_with_protocol_versions(&[tls_ver])
         .with_platform_verifier().unwrap()
         .with_no_client_auth();
+
+    // bloat TLS 1.2 client hello
+    if let Mode::TLS12 = mode {
+        config.alpn_protocols = vec![
+            b"h2".to_vec(),
+            b"http/1.1".to_vec(),
+        ];
+        for _ in 0..40 {
+            config.alpn_protocols.push(vec![0u8; 20]);
+        }
+    }
 
     let servername = if let Ok(val) = ServerName::try_from(sni.clone()) {
         val

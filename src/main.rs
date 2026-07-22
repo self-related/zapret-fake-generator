@@ -14,7 +14,8 @@ use std::time::Duration;
 
 
 enum Mode {
-    TLS,
+    TLS12,
+    TLS13,
     QUIC
 }
 
@@ -95,10 +96,12 @@ fn handle_client_tcp(mut stream: TcpStream, done: Arc<Mutex<bool>>) {
 }
 
 
-fn connect_tcp_socket(sni: String) -> bool {
+fn connect_tcp_socket(mode: &Mode, sni: String) -> bool {
     let mut stream = TcpStream::connect(format!("127.0.0.1:1111")).unwrap();
 
-    let config = ClientConfig::builder_with_protocol_versions(&[&rustls::version::TLS13])
+    let tls_ver = if let Mode::TLS12 = mode { &rustls::version::TLS12 } else { &rustls::version::TLS13 };
+
+    let config = ClientConfig::builder_with_protocol_versions(&[tls_ver])
         .with_platform_verifier().unwrap()
         .with_no_client_auth();
 
@@ -208,15 +211,16 @@ fn handle_input() -> (Mode, String) {
     let stdin = std::io::stdin();
     loop {
         // choose mode
-        println!("Enter mode:\n1 - TLS\n2 - QUIC");
+        println!("Enter mode:\n1 - TLS 1.2\n2 - TLS 1.3\n3 - QUIC");
         let mut mode_num_buff = String::new();
         _= stdin.read_line(&mut mode_num_buff);
 
         let mode_num = mode_num_buff.trim().parse::<usize>();
         
         let mode = match mode_num {
-            Ok(1) => Mode::TLS,
-            Ok(2) => Mode::QUIC,
+            Ok(1) => Mode::TLS12,
+            Ok(2) => Mode::TLS13,
+            Ok(3) => Mode::QUIC,
             _ => {
                 println!("Incorrect mode number, try again\n");
                 continue;
@@ -250,10 +254,10 @@ async fn main() {
         let done_th = done.clone();
 
         match mode {
-            Mode::TLS => {
+            Mode::TLS12 | Mode::TLS13 => {
                 let th_tcp_socket = thread::spawn(move || open_tcp_socket(1111, done_th));
                 let th_tcp_connect = thread::spawn(move || {
-                    let res = connect_tcp_socket(sni);
+                    let res = connect_tcp_socket(&mode, sni);
                     if !res {
                         *done.lock().unwrap() = true;
                     }

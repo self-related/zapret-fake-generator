@@ -14,8 +14,8 @@ use std::time::Duration;
 
 
 enum Mode {
-    TLS12,
-    TLS13,
+    Tls12,
+    Tls13,
     Tls13Kyber,
     QUIC
 }
@@ -100,7 +100,7 @@ fn handle_client_tcp(mut stream: TcpStream, done: Arc<Mutex<bool>>) {
 fn connect_tcp_socket(mode: &Mode, sni: String, bloat_len: Option<usize>) -> bool {
     let mut stream = TcpStream::connect(format!("127.0.0.1:1111")).unwrap();
 
-    let tls_ver = if let Mode::TLS12 = mode { &rustls::version::TLS12 } else { &rustls::version::TLS13 };
+    let tls_ver = if let Mode::Tls12 = mode { &rustls::version::TLS12 } else { &rustls::version::TLS13 };
 
     let provider = get_provider(&mode);
 
@@ -110,7 +110,7 @@ fn connect_tcp_socket(mode: &Mode, sni: String, bloat_len: Option<usize>) -> boo
         .with_no_client_auth();
 
     // bloat TLS 1.2/1.3 client hello
-    if let Mode::TLS12 | Mode::TLS13 = mode {
+    if let Mode::Tls12 | Mode::Tls13 = mode {
         config.alpn_protocols = vec![];
 
         if let Some(len) = bloat_len {
@@ -235,8 +235,8 @@ fn handle_input() -> (Mode, String, Option<usize>) {
         let mode_num = params[0].trim().parse::<usize>();
         
         let mode = match mode_num {
-            Ok(1) => Mode::TLS12,
-            Ok(2) => Mode::TLS13,
+            Ok(1) => Mode::Tls12,
+            Ok(2) => Mode::Tls13,
             Ok(3) => Mode::Tls13Kyber,
             Ok(4) => Mode::QUIC,
             _ => {
@@ -282,7 +282,7 @@ async fn main() {
         let done_th = done.clone();
 
         match mode {
-            Mode::TLS12 | Mode::TLS13 | Mode::Tls13Kyber => {
+            Mode::Tls12 | Mode::Tls13 | Mode::Tls13Kyber => {
                 let th_tcp_socket = thread::spawn(move || open_tcp_socket(1111, done_th));
                 let th_tcp_connect = thread::spawn(move || {
                     let res = connect_tcp_socket(&mode, sni, bloat_len);

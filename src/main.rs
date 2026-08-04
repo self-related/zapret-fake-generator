@@ -111,12 +111,10 @@ fn connect_tcp_socket(mode: &Mode, sni: String, bloat_len: Option<usize>) -> boo
 
     // bloat TLS 1.2/1.3 client hello
     if let Mode::TLS12 | Mode::TLS13 = mode {
-        config.alpn_protocols = vec![
-            b"h2".to_vec(),
-            b"http/1.1".to_vec(),
-        ];
+        config.alpn_protocols = vec![];
 
         if let Some(len) = bloat_len {
+            println!("\nPacket bloat: {} + 6 bytes (alpn ext header)\n", len * 2);
             for _ in 0..len {
                 config.alpn_protocols.push(vec![0u8; 1]);
             }
@@ -225,15 +223,16 @@ fn open_udp_socket(port: usize, done: Arc<Mutex<bool>>, sni: String) {
 }
 
 
-fn handle_input() -> (Mode, String) {
+fn handle_input() -> (Mode, String, Option<usize>) {
     let stdin = std::io::stdin();
     loop {
         // choose mode
-        println!("Enter mode:\n1 - TLS 1.2\n2 - TLS 1.3\n3 - TLS 1.3 (ML-KEM)\n4 - QUIC");
-        let mut mode_num_buff = String::new();
-        _= stdin.read_line(&mut mode_num_buff);
+        println!("Enter mode:\n1 - TLS 1.2\n2 - TLS 1.3\n3 - TLS 1.3 (ML-KEM)\n4 - QUIC\n");
+        let mut input_buff = String::new();
+        _= stdin.read_line(&mut input_buff);
 
-        let mode_num = mode_num_buff.trim().parse::<usize>();
+        let params = input_buff.trim().split('+').collect::<Vec<&str>>();
+        let mode_num = params[0].trim().parse::<usize>();
         
         let mode = match mode_num {
             Ok(1) => Mode::TLS12,
@@ -246,6 +245,16 @@ fn handle_input() -> (Mode, String) {
             }
         };
 
+        let mut bloat_len = None;
+        
+        if params.len() > 1 {
+            let len = params[1].parse::<usize>(); 
+            match len {
+                Err(_) => bloat_len = None,
+                Ok(n) => bloat_len = Some(n / 2) // halve because of header 1 byte overhead
+            }
+        }
+        
         // choose SNI
         println!("\nEnter domain (default: www.google.com):");
         let mut sni_buff = String::new();
@@ -259,31 +268,16 @@ fn handle_input() -> (Mode, String) {
 
         println!();
 
-        return (mode, sni);
+        return (mode, sni, bloat_len);
     }
 }
 
-fn get_bloat_len() -> Option<usize> {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() > 1 {
-        return match args[1].parse::<usize>() {
-            Ok(num) => Some(num / 2), // halve because of header 1 byte overhead
-            Err(_) => None
-        }
-    } else {
-        None
-    }
-}
 
 
 #[tokio::main]
 async fn main() {
-    let bloat_len = get_bloat_len();
-
-    println!("TLS 1.2/1.3 length increment: {} bytes\n", if let Some(len) = bloat_len { len * 2 } else { 0 });
-
     loop {
-        let (mode, sni) = handle_input();
+        let (mode, sni, bloat_len) = handle_input();
         let done = Arc::new(Mutex::new(false));
         let done_th = done.clone();
 

@@ -67,9 +67,9 @@ fn handle_client_tcp(mut stream: TcpStream, done: Arc<Mutex<bool>>) {
     match acceptor.accept() {
         Ok(Some(accepted)) => {
             let client_hello = accepted.client_hello();
-            println!("Parsed ClientHello successfully.");
+            // println!("Parsed ClientHello successfully.");
             if let Some(sni) = client_hello.server_name() {
-                println!("SNI: {}", sni);
+                // println!("SNI: {}", sni);
                 file_name = format!("tls_{sni}.bin");
             }
         }

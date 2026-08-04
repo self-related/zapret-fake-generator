@@ -109,8 +109,8 @@ fn connect_tcp_socket(mode: &Mode, sni: String, bloat_len: Option<usize>) -> boo
         .with_platform_verifier().expect("Failed platform verifier")
         .with_no_client_auth();
 
-    // bloat TLS 1.2 client hello
-    if let Mode::TLS12 = mode {
+    // bloat TLS 1.2/1.3 client hello
+    if let Mode::TLS12 | Mode::TLS13 = mode {
         config.alpn_protocols = vec![
             b"h2".to_vec(),
             b"http/1.1".to_vec(),
@@ -280,7 +280,7 @@ fn get_bloat_len() -> Option<usize> {
 async fn main() {
     let bloat_len = get_bloat_len();
 
-    println!("TLS 1.2 length increment: {} bytes\n", if let Some(len) = bloat_len { len * 2 } else { 0 });
+    println!("TLS 1.2/1.3 length increment: {} bytes\n", if let Some(len) = bloat_len { len * 2 } else { 0 });
 
     loop {
         let (mode, sni) = handle_input();

@@ -16,22 +16,23 @@ use std::time::Duration;
 enum Mode {
     TLS12,
     TLS13,
+    Tls13Kyber,
     QUIC
 }
 
 
-fn init_cyphers() {
-    let kx_groups = vec![
-        kx_group::MLKEM768,
-        kx_group::SECP256R1,
-        kx_group::SECP384R1,
-    ];
+fn get_provider(mode: &Mode) -> CryptoProvider {
+    let kx_groups =
+        if let Mode::Tls13Kyber = mode {
+            vec![kx_group::MLKEM768, kx_group::SECP256R1, kx_group::SECP384R1]
+        } else {
+            vec![kx_group::X25519, kx_group::SECP256R1, kx_group::SECP384R1]
+    };
 
-    let provider = CryptoProvider {
+    CryptoProvider {
         kx_groups,
         ..aws_lc_rs::default_provider()
-    };
-    _= provider.install_default();
+    }
 }
 
 
@@ -101,8 +102,11 @@ fn connect_tcp_socket(mode: &Mode, sni: String, bloat_len: Option<usize>) -> boo
 
     let tls_ver = if let Mode::TLS12 = mode { &rustls::version::TLS12 } else { &rustls::version::TLS13 };
 
-    let mut config = ClientConfig::builder_with_protocol_versions(&[tls_ver])
-        .with_platform_verifier().unwrap()
+    let provider = get_provider(&mode);
+
+    let mut config = ClientConfig::builder_with_provider(Arc::new(provider))
+        .with_protocol_versions(&[tls_ver]).expect("Failed setting tls_ver")
+        .with_platform_verifier().expect("Failed platform verifier")
         .with_no_client_auth();
 
     // bloat TLS 1.2 client hello
@@ -225,7 +229,7 @@ fn handle_input() -> (Mode, String) {
     let stdin = std::io::stdin();
     loop {
         // choose mode
-        println!("Enter mode:\n1 - TLS 1.2\n2 - TLS 1.3\n3 - QUIC");
+        println!("Enter mode:\n1 - TLS 1.2\n2 - TLS 1.3\n3 - TLS 1.3 (ML-KEM)\n4 - QUIC");
         let mut mode_num_buff = String::new();
         _= stdin.read_line(&mut mode_num_buff);
 
@@ -234,7 +238,8 @@ fn handle_input() -> (Mode, String) {
         let mode = match mode_num {
             Ok(1) => Mode::TLS12,
             Ok(2) => Mode::TLS13,
-            Ok(3) => Mode::QUIC,
+            Ok(3) => Mode::Tls13Kyber,
+            Ok(4) => Mode::QUIC,
             _ => {
                 println!("Incorrect mode number, try again\n");
                 continue;
@@ -273,7 +278,6 @@ fn get_bloat_len() -> Option<usize> {
 
 #[tokio::main]
 async fn main() {
-    init_cyphers();
     let bloat_len = get_bloat_len();
 
     println!("TLS 1.2 length increment: {} bytes\n", if let Some(len) = bloat_len { len * 2 } else { 0 });
@@ -284,7 +288,7 @@ async fn main() {
         let done_th = done.clone();
 
         match mode {
-            Mode::TLS12 | Mode::TLS13 => {
+            Mode::TLS12 | Mode::TLS13 | Mode::Tls13Kyber => {
                 let th_tcp_socket = thread::spawn(move || open_tcp_socket(1111, done_th));
                 let th_tcp_connect = thread::spawn(move || {
                     let res = connect_tcp_socket(&mode, sni, bloat_len);

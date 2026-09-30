@@ -17,11 +17,16 @@ enum Mode {
     Tls12,
     Tls13,
     Tls13Kyber,
+    Tls13X25519MLKEM768,
     QUIC
 }
 
 
 fn get_provider(mode: &Mode) -> CryptoProvider {
+    if let Mode::Tls13X25519MLKEM768 = mode {
+        return aws_lc_rs::default_provider();
+    }
+
     let kx_groups =
         if let Mode::Tls13Kyber = mode {
             vec![kx_group::MLKEM768, kx_group::SECP256R1, kx_group::SECP384R1]
@@ -227,7 +232,7 @@ fn handle_input() -> (Mode, String, Option<usize>) {
     let stdin = std::io::stdin();
     loop {
         // choose mode
-        println!("Enter mode:\n1 - TLS 1.2\n2 - TLS 1.3\n3 - TLS 1.3 (ML-KEM)\n4 - QUIC\n");
+        println!("Enter mode:\n1 - TLS 1.2\n2 - TLS 1.3\n3 - TLS 1.3 (ML-KEM)\n4 - TLS 1.3 (X25519MLKEM768)\n5 - QUIC\n");
         let mut input_buff = String::new();
         _= stdin.read_line(&mut input_buff);
 
@@ -238,7 +243,8 @@ fn handle_input() -> (Mode, String, Option<usize>) {
             Ok(1) => Mode::Tls12,
             Ok(2) => Mode::Tls13,
             Ok(3) => Mode::Tls13Kyber,
-            Ok(4) => Mode::QUIC,
+            Ok(4) => Mode::Tls13X25519MLKEM768,
+            Ok(5) => Mode::QUIC,
             _ => {
                 println!("Incorrect mode number, try again\n");
                 continue;
@@ -282,7 +288,7 @@ async fn main() {
         let done_th = done.clone();
 
         match mode {
-            Mode::Tls12 | Mode::Tls13 | Mode::Tls13Kyber => {
+            Mode::Tls12 | Mode::Tls13 | Mode::Tls13Kyber | Mode::Tls13X25519MLKEM768 => {
                 let th_tcp_socket = thread::spawn(move || open_tcp_socket(1111, done_th));
                 let th_tcp_connect = thread::spawn(move || {
                     let res = connect_tcp_socket(&mode, sni, bloat_len);
